@@ -42,7 +42,7 @@ def send_queries(port, result_dir):
     
     for i, lst in results.items():
         df = pd.DataFrame.from_dict(lst)
-        df.to_parquet(f'{result_dir}/i.pq')
+        df.to_parquet(f'{result_dir}/{i}.pq')
         print(df['duration_s'].mean())
 
 if __name__ == "__main__":
