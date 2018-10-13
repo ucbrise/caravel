@@ -1,0 +1,4 @@
+ujson
+clicks
+pyzmq
+tensorflow-gpu==1.10.0
