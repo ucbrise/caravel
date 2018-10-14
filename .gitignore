@@ -5,4 +5,4 @@ ckpts/
 __pycache__/
 *.pq
 *.ckpt
-models
+tf-models

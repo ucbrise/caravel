@@ -5,3 +5,4 @@ pyzmq
 tensorflow-gpu==1.10.0
 pyarrow
 redis
+isort
