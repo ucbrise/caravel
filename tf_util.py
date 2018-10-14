@@ -1,26 +1,28 @@
+import threading
 import time
+from pprint import pprint
+
+import click
+import numpy as np
+import pandas as pd
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
-import numpy as np
 from tensorflow.contrib.slim.nets import resnet_v1
-from pprint import pprint
-import pandas as pd
-import click
-import threading
 
 HEIGHT = 224
 WIDTH = 224
 CHANNELS = 3
 checkpoint_file = "resnet_v1_50.ckpt"
 
-import numpy as np
 
-res50_path = 'ckpts/resnet_v1_50.ckpt'
-res152_path = 'ckpts/resnet_v1_152.ckpt'
-mobilenet_path = 'ckpts/mobilenet_v2_1.0_96.ckpt'
+res50_path = "ckpts/resnet_v1_50.ckpt"
+res152_path = "ckpts/resnet_v1_152.ckpt"
+mobilenet_path = "ckpts/mobilenet_v2_1.0_96.ckpt"
+
 
 def _get_resnet_input():
     return np.random.randn(1, 224, 224, 3)
+
 
 def _get_mobilenet_input():
     return np.random.randn(1, 96, 96, 3)

@@ -15,6 +15,8 @@ s3-dir:
 	aws s3 sync s3://learningsys-2018-gpu-mux learningsys-2018-gpu-mux
 
 format:
-	isort *.py
-	black *.py
-	
+	bash bin/format-code.sh
+
+push: format
+	git commit -a
+	git push origin master

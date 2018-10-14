@@ -1,10 +1,12 @@
-import zmq
-import click
-from datetime import datetime
-from tf_test import load_tf_sess, get_input
-import ujson as json
 import time
+from datetime import datetime
+
+import click
 import redis
+import zmq
+
+import ujson as json
+from tf_test import get_input, load_tf_sess
 
 
 def _block_until(key, val):

@@ -1,8 +1,9 @@
-from subprocess import Popen
-from shlex import split
-import click
 import socket
 import time
+from shlex import split
+from subprocess import Popen
+
+import click
 import redis
 
 
