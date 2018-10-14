@@ -1,4 +1,6 @@
 .vscode/
+ckpts/
+*.ipynb
 .ipynb_checkpoints/
 __pycache__/
 *.pq
