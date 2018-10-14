@@ -5,6 +5,7 @@ import os
 import time
 import pandas as pd
 
+
 @click.command()
 @click.option("--port", "-p", multiple=True)
 @click.option("--result-dir")
@@ -27,23 +28,24 @@ def send_queries(port, result_dir):
         for s in ready_socks:
             msg = json.loads(s.recv())
             # print(f"[Driver] recved {msg}")
-        
+
             # handle handshake msg
             if msg["query_id"] == 0:
                 s.send_string(str(time.time()))
                 continue
-            
-            msg['recv_time_s'] = time.time()
+
+            msg["recv_time_s"] = time.time()
             results[sockets[s]].append(msg)
             s.send_string(str(time.time()))
 
         if all([len(lst) > 1000 for lst in results.values()]):
             break
-    
+
     for i, lst in results.items():
         df = pd.DataFrame.from_dict(lst)
-        df.to_parquet(f'{result_dir}/{i}.pq')
-        print(df['duration_s'].mean())
+        df.to_parquet(f"{result_dir}/{i}.pq")
+        print(df["duration_s"].mean())
+
 
 if __name__ == "__main__":
     send_queries()
