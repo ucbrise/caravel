@@ -34,6 +34,7 @@ def master(
     # reset the warmup lock
     r = redis.Redis()
     r.set("warmup-lock", 0)
+    r.set("connect-lock", 0)
 
     child_procs = []
     driver_cmd = f"python driver.py --result-dir {result_dir}"
@@ -50,7 +51,7 @@ def master(
     for p in ports:
         port_arg = f" --port {p}"
         driver_cmd += port_arg
-    driver_cmd = f"numactl -C {num_procs} " + driver_cmd
+    driver_cmd = f"numactl -C {num_procs+1} " + driver_cmd
     if force:
         driver_cmd += " --force"
     driver_proc = Popen(split(driver_cmd))
@@ -58,14 +59,16 @@ def master(
 
     for i, p in enumerate(ports):
         port_arg = f" --port {p}"
-        cmd = split(f"numactl -C {i} " + client_cmd + port_arg)
+        cmd = split(f"numactl -C {i+1} " + client_cmd + port_arg)
         if power_graph:
             cmd += ["--power-graph"]
         child_procs.append(Popen(cmd))
+        time.sleep(1)
 
     # run driver
     driver_proc.wait()
-    [p.kill() for p in child_procs]
+    [p.terminate() for p in child_procs]
+    time.sleep(2)
 
 
 if __name__ == "__main__":

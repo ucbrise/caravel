@@ -9,7 +9,7 @@ result_dir_root = "learningsys-2018-gpu-mux"
 
 def generate_command(approach, model, replica):
     mps_req = "start-mps" if approach == "mps" else "stop-mps"
-    mem_frac = 1 / replica * 0.9
+    mem_frac = 0.1
     name = f"{approach}-{model}-{replica}"
     print(
         f"""
@@ -17,9 +17,11 @@ def generate_command(approach, model, replica):
 \t  bash bin/{mps_req}.sh
 \t  python master.py \
         --mem-frac {mem_frac} \
+        --allow-growth \
         --result-dir {os.path.join(result_dir_root, 'result', approach, model, str(replica))} \
         --num-procs {replica} \
         --model-name {model} \
+        --force \
         {"--power-graph" if model == "powergraph" else "#"}
     """
     )

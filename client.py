@@ -11,7 +11,9 @@ from tf_util import SUPPORTED_MODELS, get_input, load_tf_power_graph, load_tf_se
 
 def _block_until(key, val):
     r = redis.Redis()
-    r.incr(key)
+    cur = r.incr(key)
+    if cur == val:
+        return
     while int(r.get(key)) != val:
         pass
 
@@ -42,6 +44,9 @@ def start_client(port, mem_frac, allow_growth, num_procs, model_name, power_grap
         sess, img_tensor, predictions = load_tf_sess(mem_frac, allow_growth, model_name)
         input_img = get_input(model_name)
         sess_run = lambda: sess.run(predictions, feed_dict={img_tensor: input_img})
+
+    if not power_graph:
+        _block_until("connect-lock", num_procs)
 
     # Model Warmup
     for _ in range(200):

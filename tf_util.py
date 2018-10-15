@@ -62,6 +62,10 @@ def load_tf_sess(mem_frac=0.1, allow_growth=False, model_name=None):
     return sess, img_tensor, predictions
 
 
+# How to merge many subgraphs into a single graph
+# https://stackoverflow.com/questions/42858785/connect-input-and-output-tensors-of-two-different-graphs-tensorflow
+
+
 def _create_subgraph(name_scope, ckpt_path, model_name):
     graph = tf.Graph()
     with graph.as_default():
