@@ -1,3 +1,4 @@
+import os
 import socket
 import time
 from shlex import split
@@ -28,8 +29,20 @@ def find_unbound_port(n=1):
 @click.option("--model-name", type=click.Choice(SUPPORTED_MODELS), required=True)
 @click.option("--power-graph", is_flag=True)
 @click.option("--force", is_flag=True)
+@click.option(
+    "--mps-thread-strategy",
+    type=click.Choice(["default", "even", "even_times_2"]),
+    default="default",
+)
 def master(
-    mem_frac, allow_growth, result_dir, num_procs, model_name, power_graph, force
+    mem_frac,
+    allow_growth,
+    result_dir,
+    num_procs,
+    model_name,
+    power_graph,
+    force,
+    mps_thread_strategy,
 ):
     # reset the warmup lock
     r = redis.Redis()
@@ -41,6 +54,13 @@ def master(
     client_cmd = f"python client.py --mem-frac {mem_frac} --num-procs {num_procs} --model-name {model_name}"
     if allow_growth:
         client_cmd += " --allow-growth"
+
+    # Following page 12 of https://docs.nvidia.com/deploy/pdf/CUDA_Multi_Process_Service_Overview.pdf
+    mps_thread_perc = 1.0
+    if mps_thread_strategy == "even":
+        mps_thread_perc = 1 / num_procs
+    elif mps_thread_strategy == "even_times_2":
+        mps_thread_perc = 1 / (0.5 * num_procs)
 
     # run driver
     if power_graph:
@@ -62,7 +82,14 @@ def master(
         cmd = split(f"numactl -C {i+1} " + client_cmd + port_arg)
         if power_graph:
             cmd += ["--power-graph"]
-        child_procs.append(Popen(cmd))
+        child_procs.append(
+            Popen(
+                cmd,
+                env=dict(
+                    os.environ, CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=str(mps_thread_perc)
+                ),
+            )
+        )
         time.sleep(1)
 
     # run driver

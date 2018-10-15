@@ -1,8 +1,9 @@
 .vscode/
+*.log
 Makefile.run
 ckpts/
-*.ipynb
 .ipynb_checkpoints/
+*.png
 __pycache__/
 *.pq
 *.ckpt

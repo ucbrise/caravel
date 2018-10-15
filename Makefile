@@ -16,6 +16,8 @@ s3-dir:
 
 format:
 	bash bin/format-code.sh
+	jupyter nbconvert --clear-output *.ipynb
+
 sync:
 	cd learningsys-2018-gpu-mux && bash sync.sh
 
