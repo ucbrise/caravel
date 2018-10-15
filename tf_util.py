@@ -14,20 +14,22 @@ from nets.mobilenet import mobilenet_v2  # isort:skip
 HEIGHT = 224
 WIDTH = 224
 CHANNELS = 3
-SUPPORTED_MODELS = ["res50", "res152", "mobilenet"]
+SUPPORTED_MODELS = ["res50", "res152", "mobilenet", "mobilenet-224"]
 MODELS_TO_CKPT = {
     "res50": "ckpts/resnet_v1_50.ckpt",
     "res152": "ckpts/resnet_v1_152.ckpt",
     "mobilenet": "ckpts/mobilenet_v2_1.0_96.ckpt",
+    "mobilenet-224": "ckpts/mobilenet_v2_1.0_224.ckpt",
 }
 MODELS_TO_SHAPE = {
     "res50": [1, 224, 224, 3],
     "res152": [1, 224, 224, 3],
     "mobilenet": [1, 96, 96, 3],
+    "mobilenet-224": [1, 224, 224, 3],
 }
 
 
-def get_input(model_name, batch_size):
+def get_input(model_name, batch_size=1):
     shape = MODELS_TO_SHAPE[model_name]
     shape[0] = batch_size
     return np.random.randn(*shape)
@@ -44,7 +46,7 @@ def _get_endpoints(model_name, img_tensor):
             _, end_points = resnet_v1.resnet_v1_152(img_tensor, 1000, is_training=False)
         return end_points["predictions"]
 
-    elif model_name == "mobilenet":
+    elif model_name.startswith("mobilenet"):
         with tf.contrib.slim.arg_scope(mobilenet_v2.training_scope(is_training=False)):
             _, endpoints = mobilenet_v2.mobilenet(img_tensor)
         return endpoints["Predictions"]

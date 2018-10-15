@@ -13,4 +13,8 @@ wget https://storage.googleapis.com/mobilenet_v2/checkpoints/mobilenet_v2_1.0_96
 tar -xvf mobilenet_v2_1.0_96.tgz
 rm  mobilenet_v2_1.0_96.tgz
 
+wget https://storage.googleapis.com/mobilenet_v2/checkpoints/mobilenet_v2_1.0_224.tgz
+tar -xvf mobilenet_v2_1.0_224.tgz
+rm  mobilenet_v2_1.0_224.tgz
+
 cd ..
