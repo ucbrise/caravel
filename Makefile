@@ -21,7 +21,7 @@ format:
 sync:
 	cd learningsys-2018-gpu-mux && bash sync.sh
 
-push: format
+push: format sync
 	git commit -a
 	git push origin master
 

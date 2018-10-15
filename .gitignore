@@ -1,4 +1,5 @@
 .vscode/
+learningsys-2018-gpu-mux/
 *.log
 Makefile.run
 ckpts/
