@@ -1,7 +1,7 @@
 import os
 from itertools import product
 
-approaches = ["mux", "mps", "powergraph", "mps-even", "mps-even-times-2"][3:]
+approaches = ["mux", "mps", "powergraph", "mps-even", "mps-even-times-2", "batch"][-1:]
 models = ["res50", "res152", "mobilenet"]
 replicas = list(range(1, 6))
 result_dir_root = "learningsys-2018-gpu-mux"
@@ -32,7 +32,8 @@ def generate_command(approach, model, replica, force):
         --num-procs {replica} \
         --model-name {model} \
         --mps-thread-strategy {mps_strategy} \
-        {"--power-graph" if model == "powergraph" else "#"} \
+        {"--power-graph" if model == "powergraph" or "batch" else "#"} \
+        {"--batch" if approach == "batch" else "#"} \
         {'--force' if force else '#'}
     """
     )

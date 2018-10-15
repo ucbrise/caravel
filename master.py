@@ -34,6 +34,7 @@ def find_unbound_port(n=1):
     type=click.Choice(["default", "even", "even_times_2"]),
     default="default",
 )
+@click.option("--batch", is_flag=True)
 def master(
     mem_frac,
     allow_growth,
@@ -43,7 +44,11 @@ def master(
     power_graph,
     force,
     mps_thread_strategy,
+    batch,
 ):
+    if batch:
+        assert power_graph, "Batch mode must have powergraph on"
+
     # reset the warmup lock
     r = redis.Redis()
     r.set("warmup-lock", 0)
@@ -82,6 +87,8 @@ def master(
         cmd = split(f"numactl -C {i+1} " + client_cmd + port_arg)
         if power_graph:
             cmd += ["--power-graph"]
+        if batch:
+            cmd += ["--batch"]
         child_procs.append(
             Popen(
                 cmd,

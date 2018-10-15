@@ -21,14 +21,16 @@ MODELS_TO_CKPT = {
     "mobilenet": "ckpts/mobilenet_v2_1.0_96.ckpt",
 }
 MODELS_TO_SHAPE = {
-    "res50": (1, 224, 224, 3),
-    "res152": (1, 224, 224, 3),
-    "mobilenet": (1, 96, 96, 3),
+    "res50": [1, 224, 224, 3],
+    "res152": [1, 224, 224, 3],
+    "mobilenet": [1, 96, 96, 3],
 }
 
 
-def get_input(model_name):
-    return np.random.randn(*MODELS_TO_SHAPE[model_name])
+def get_input(model_name, batch_size):
+    shape = MODELS_TO_SHAPE[model_name]
+    shape[0] = batch_size
+    return np.random.randn(*shape)
 
 
 def _get_endpoints(model_name, img_tensor):
@@ -48,10 +50,12 @@ def _get_endpoints(model_name, img_tensor):
         return endpoints["Predictions"]
 
 
-def load_tf_sess(mem_frac=0.1, allow_growth=False, model_name=None):
+def load_tf_sess(mem_frac=0.1, allow_growth=False, model_name=None, batch_size=1):
     graph = tf.Graph()
     with graph.as_default():
-        img_tensor = tf.placeholder(tf.float32, shape=MODELS_TO_SHAPE[model_name])
+        shape = MODELS_TO_SHAPE[model_name]
+        shape[0] = batch_size
+        img_tensor = tf.placeholder(tf.float32, shape=shape)
         predictions = _get_endpoints(model_name, img_tensor)
         saver = tf.train.Saver()
     config = tf.ConfigProto()

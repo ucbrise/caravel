@@ -25,13 +25,16 @@ def _block_until(key, val):
 @click.option("--num-procs", type=int, required=True)
 @click.option("--model-name", type=click.Choice(SUPPORTED_MODELS), required=True)
 @click.option("--power-graph", is_flag=True)
-def start_client(port, mem_frac, allow_growth, num_procs, model_name, power_graph):
+@click.option("--batch", is_flag=True)
+def start_client(
+    port, mem_frac, allow_growth, num_procs, model_name, power_graph, batch
+):
     ctx = zmq.Context()
     sock = ctx.socket(zmq.REQ)
     sock.connect(f"tcp://127.0.0.1:{port}")
     print(f"[Client] Bind to port {port}")
 
-    if power_graph:
+    if power_graph and not batch:
         print(f"[Client] Coalescing {num_procs} graphs into one graph!")
         sess, img_tensors, predictions = load_tf_power_graph(
             mem_frac, allow_growth, model_name, num_procs
@@ -40,12 +43,18 @@ def start_client(port, mem_frac, allow_growth, num_procs, model_name, power_grap
         sess_run = lambda: sess.run(
             predictions, feed_dict={img_tensor: input_img for img_tensor in img_tensors}
         )
+    elif power_graph and batch:
+        sess, img_tensor, predictions = load_tf_sess(
+            mem_frac, allow_growth, model_name, batch_size=num_procs
+        )
+        input_img = get_input(model_name, batch_size=num_procs)
+        sess_run = lambda: sess.run(predictions, feed_dict={img_tensor: input_img})
     else:
         sess, img_tensor, predictions = load_tf_sess(mem_frac, allow_growth, model_name)
         input_img = get_input(model_name)
         sess_run = lambda: sess.run(predictions, feed_dict={img_tensor: input_img})
 
-    if not power_graph:
+    if not (power_graph or batch):
         _block_until("connect-lock", num_procs)
 
     # Model Warmup
@@ -53,7 +62,7 @@ def start_client(port, mem_frac, allow_growth, num_procs, model_name, power_grap
         sess_run()
     print(f"[Client] Warmup finished")
 
-    if not power_graph:
+    if not (power_graph or batch):
         _block_until("warmup-lock", num_procs)
 
     query_count = 0
