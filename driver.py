@@ -11,8 +11,12 @@ import ujson as json
 @click.command()
 @click.option("--port", "-p", multiple=True)
 @click.option("--result-dir")
-def send_queries(port, result_dir):
-    os.makedirs(result_dir, exist_ok=True)
+@click.option("--force", is_flag=True)
+def send_queries(port, result_dir, force):
+    if os.path.exists(result_dir) and not force:
+        print(f"[Driver] Direcotry {result_dir} exists. Skipping.")
+        return
+
     ctx = zmq.Context()
     poller = zmq.Poller()
 
@@ -42,6 +46,7 @@ def send_queries(port, result_dir):
         if all([len(lst) > 1000 for lst in results.values()]):
             break
 
+    os.makedirs(result_dir, exist_ok=True)
     for i, lst in results.items():
         df = pd.DataFrame.from_dict(lst)
         df.to_parquet(f"{result_dir}/{i}.pq")

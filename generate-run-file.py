@@ -4,7 +4,7 @@ from itertools import product
 approaches = ["mux", "mps", "powergraph"]
 models = ["res50", "res152", "mobilenet"]
 replicas = list(range(1, 6))
-result_dir_root = "learning-2018-gpu-mux"
+result_dir_root = "learningsys-2018-gpu-mux"
 
 
 def generate_command(approach, model, replica):
@@ -13,10 +13,10 @@ def generate_command(approach, model, replica):
     name = f"{approach}-{model}-{replica}"
     print(
         f"""
-{name}: {mps_req}
-\t  time python master.py \
+{name}:
+\t  bash bin/{mps_req}.sh
+\t  python master.py \
         --mem-frac {mem_frac} \
-        --allow-growth \
         --result-dir {os.path.join(result_dir_root, 'result', approach, model, str(replica))} \
         --num-procs {replica} \
         --model-name {model} \
@@ -27,15 +27,6 @@ def generate_command(approach, model, replica):
 
 
 def main():
-    print(
-        """
-start-mps:
-\t  bash bin/start-mps.sh
-stop-mps:
-\t  bash bin/stop-mps.sh
-    """
-    )
-
     all_names = []
     for approach, model, replica in product(approaches, models, replicas):
         all_names.append(generate_command(approach, model, replica))

@@ -27,7 +27,10 @@ def find_unbound_port(n=1):
 @click.option("--num-procs", "-n", type=int, default=5, required=True)
 @click.option("--model-name", type=click.Choice(SUPPORTED_MODELS), required=True)
 @click.option("--power-graph", is_flag=True)
-def master(mem_frac, allow_growth, result_dir, num_procs, model_name, power_graph):
+@click.option("--force", is_flag=True)
+def master(
+    mem_frac, allow_growth, result_dir, num_procs, model_name, power_graph, force
+):
     # reset the warmup lock
     r = redis.Redis()
     r.set("warmup-lock", 0)
@@ -48,6 +51,8 @@ def master(mem_frac, allow_growth, result_dir, num_procs, model_name, power_grap
         port_arg = f" --port {p}"
         driver_cmd += port_arg
     driver_cmd = f"numactl -C {num_procs} " + driver_cmd
+    if force:
+        driver_cmd += " --force"
     driver_proc = Popen(split(driver_cmd))
     time.sleep(1)
 
