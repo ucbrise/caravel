@@ -29,16 +29,15 @@ def send_queries(port, result_dir):
         ready_socks = dict(poller.poll())
         for s in ready_socks:
             msg = json.loads(s.recv())
-            # print(f"[Driver] recved {msg}")
 
             # handle handshake msg
             if msg["query_id"] == 0:
                 s.send_string(str(time.time()))
                 continue
 
-            msg["recv_time_s"] = time.time()
+            msg["recv_time_ms"] = time.time() * 1000
             results[sockets[s]].append(msg)
-            s.send_string(str(time.time()))
+            s.send_string(str(time.time() * 1000))
 
         if all([len(lst) > 1000 for lst in results.values()]):
             break
@@ -46,7 +45,7 @@ def send_queries(port, result_dir):
     for i, lst in results.items():
         df = pd.DataFrame.from_dict(lst)
         df.to_parquet(f"{result_dir}/{i}.pq")
-        print(df["duration_s"].mean())
+        print(df["duration_ms"].mean())
 
 
 if __name__ == "__main__":

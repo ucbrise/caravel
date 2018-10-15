@@ -6,6 +6,8 @@ from subprocess import Popen
 import click
 import redis
 
+from tf_util import SUPPORTED_MODELS
+
 
 def find_unbound_port(n=1):
     socks = []
@@ -23,19 +25,25 @@ def find_unbound_port(n=1):
 @click.option("--allow-growth", is_flag=True, required=True)
 @click.option("--result-dir", required=True)
 @click.option("--num-procs", "-n", type=int, default=5, required=True)
-def master(mem_frac, allow_growth, result_dir, num_procs):
+@click.option("--model-name", type=click.Choice(SUPPORTED_MODELS), required=True)
+@click.option("--power-graph", is_flag=True)
+def master(mem_frac, allow_growth, result_dir, num_procs, model_name, power_graph):
     # reset the warmup lock
     r = redis.Redis()
     r.set("warmup-lock", 0)
 
     child_procs = []
     driver_cmd = f"python driver.py --result-dir {result_dir}"
-    client_cmd = f"python client.py --mem-frac {mem_frac} --num-procs {num_procs}"
+    client_cmd = f"python client.py --mem-frac {mem_frac} --num-procs {num_procs} --model-name {model_name}"
     if allow_growth:
         client_cmd += " --allow-growth"
 
     # run driver
-    ports = find_unbound_port(num_procs)
+    if power_graph:
+        ports = find_unbound_port(1)
+    else:
+        ports = find_unbound_port(num_procs)
+
     for p in ports:
         port_arg = f" --port {p}"
         driver_cmd += port_arg
@@ -46,6 +54,8 @@ def master(mem_frac, allow_growth, result_dir, num_procs):
     for i, p in enumerate(ports):
         port_arg = f" --port {p}"
         cmd = split(f"numactl -C {i} " + client_cmd + port_arg)
+        if power_graph:
+            cmd += ["--power-graph"]
         child_procs.append(Popen(cmd))
 
     # run driver

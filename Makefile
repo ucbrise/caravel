@@ -16,7 +16,10 @@ s3-dir:
 
 format:
 	bash bin/format-code.sh
+sync:
+	cd learningsys-2018-gpu-mux && bash sync.sh
 
 push: format
 	git commit -a
 	git push origin master
+	

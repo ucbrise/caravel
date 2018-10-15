@@ -1,0 +1,2 @@
+isort *.py
+black *.py
