@@ -1,1 +1,1 @@
-sudo echo quit | sudo nvidia-cuda-mps-control
+sudo echo quit | sudo nvidia-cuda-mps-control || true

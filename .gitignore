@@ -1,4 +1,5 @@
 .vscode/
+Makefile.run
 ckpts/
 *.ipynb
 .ipynb_checkpoints/

@@ -1,1 +1,1 @@
-sudo nvidia-cuda-mps-control -d
+sudo nvidia-cuda-mps-control -d || true
