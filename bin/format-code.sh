@@ -1,2 +1,2 @@
-isort *.py
-black *.py
+isort src/*.py --recursive
+black src

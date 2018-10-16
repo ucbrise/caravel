@@ -16,7 +16,7 @@ s3-dir:
 
 format:
 	bash bin/format-code.sh
-	jupyter nbconvert --ClearOutputPreprocessor.enabled=True --inplace *.ipynb
+	jupyter nbconvert --ClearOutputPreprocessor.enabled=True --inplace notebooks/*.ipynb
 
 sync:
 	cd learningsys-2018-gpu-mux && bash sync.sh
