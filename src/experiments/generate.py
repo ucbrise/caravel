@@ -5,11 +5,12 @@ approaches = ["mux", "mps", "batch"]
 # models = ["res50", "res152", "mobilenet", "mobilenet-224"]
 models = ["mobilenet", "res50"]
 replicas = list(range(1, 15))
-result_dir_root = "learningsys-2018-gpu-mux/p3-8xlarge"
+placement_policy = [0]
+result_dir_root = "learningsys-2018-gpu-mux/p3-8xlarge-random-placement"
 force = [False, True]
 
 
-def generate_command(approach, model, replica, force):
+def generate_command(approach, model, replica, force, placement_policy):
     mps_req = "start-mps" if approach.startswith("mps") else "stop-mps"
 
     name = f"{approach}-{model}-{replica}"
@@ -18,7 +19,7 @@ def generate_command(approach, model, replica, force):
 
     cmd = f"""python src/master.py --result-dir \
     {os.path.join(result_dir_root, 'result', approach, model, str(replica))} \
-    --num-procs {replica} --model-name {model} \
+    --num-procs {replica} --model-name {model} --placement-policy {placement_policy} \
     """
     if approach == "powergraph":
         cmd += "\t --power-graph"
@@ -40,8 +41,12 @@ def generate_command(approach, model, replica, force):
 
 def main():
     all_names = []
-    for approach, model, replica in product(approaches, models, replicas):
-        all_names.append(generate_command(approach, model, replica, force=False))
+    for approach, model, replica, pp in product(
+        approaches, models, replicas, placement_policy
+    ):
+        all_names.append(
+            generate_command(approach, model, replica, force=False, placement_policy=pp)
+        )
 
     print(
         f"""
@@ -50,8 +55,12 @@ all: {' '.join(all_names)}
     )
 
     all_names = []
-    for approach, model, replica in product(approaches, models, replicas):
-        all_names.append(generate_command(approach, model, replica, force=True))
+    for approach, model, replica, pp in product(
+        approaches, models, replicas, placement_policy
+    ):
+        all_names.append(
+            generate_command(approach, model, replica, force=True, placement_policy=pp)
+        )
     print(
         f"""
 all-force: {' '.join(all_names)}
