@@ -41,6 +41,8 @@ def generate_command(approach, model, replica, force):
 def main():
     all_names = []
     for approach, model, replica in product(approaches, models, replicas):
+        if approach == 'mux' and 'model' == 'res50' and replica > 10:
+            continue
         all_names.append(generate_command(approach, model, replica, force=False))
 
     print(
