@@ -3,38 +3,85 @@ import socket
 import time
 from shlex import split
 from subprocess import Popen
-
 import click
 import redis
+import numpy as np
 
-from tf_util import SUPPORTED_MODELS
+TOTAL_CORES = 32
 
 
-def find_unbound_port(n=1):
-    socks = []
-    for _ in range(n):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(("", 0))
-        socks.append(s)
-    addrs = [s.getsockname()[1] for s in socks]
-    [s.close() for s in socks]
-    return addrs
+class ClientRun:
+    def __init__(self, model_name, result_path, num_procs):
+        self.model_name = model_name
+        self.result_path = result_path
+        self.num_proc = num_procs
+
+        self.mem_frac = str(0.95 / self.num_proc)
+        self.allow_growth = False
+
+        self.power_graph = False
+        self.batch_size = 1
+        self.force = False
+
+        self.proc = None
+
+        self.core = None
+
+    def run(self):
+        cmd = ["python", "src/client.py"]
+        cmd += ["--model-name", self.model_name]
+        cmd += ["--result-path", self.result_path]
+        cmd += ["--num-replicas", self.num_proc]
+        cmd += ["--mem-frac", self.mem_frac]
+        if self.allow_growth:
+            cmd += ["--allow-growth"]
+        if self.power_graph:
+            cmd += ["--power-graph", "--power-graph-count", self.power_graph_count]
+        if self.batch_size != 1:
+            cmd += ["--batch-size", self.batch_size]
+        if self.force:
+            cmd += ["--force"]
+
+        if self.core is not None:
+            cmd = ["numactl", "-C", self.core] + cmd
+
+        cmd = split(" ".join(map(str, cmd)))
+        print(" ".join(cmd))
+        self.proc = Popen(cmd, env=dict(os.environ, CUDA_VISIBLE_DEVICES="0"))
+
+    def wait(self):
+        self.proc.wait()
+
+    def set_tf_mem_frac(self, frac):
+        self.mem_frac = str(frac)
+
+    def set_tf_allow_growth(self):
+        self.allow_growth = True
+
+    def set_power_graph(self, n):
+        self.power_graph = True
+        self.power_graph_count = n
+
+    def set_batch_size(self, n):
+        self.batch_size = n
+
+    def set_force(self):
+        self.force = True
+
+    def set_core(self, core):
+        self.core = core
 
 
 @click.command()
-@click.option("--mem-frac", type=float, required=True)
-@click.option("--allow-growth", is_flag=True, required=True)
+@click.option("--mem-frac", type=float)
+@click.option("--allow-growth", is_flag=True)
 @click.option("--result-dir", required=True)
 @click.option("--num-procs", "-n", type=int, default=5, required=True)
-@click.option("--model-name", type=click.Choice(SUPPORTED_MODELS), required=True)
+@click.option("--model-name", required=True)
 @click.option("--power-graph", is_flag=True)
 @click.option("--force", is_flag=True)
-@click.option(
-    "--mps-thread-strategy",
-    type=click.Choice(["default", "even", "even_times_2"]),
-    default="default",
-)
 @click.option("--batch", is_flag=True)
+@click.option("--placement-policy", type=int, default=1)
 def master(
     mem_frac,
     allow_growth,
@@ -43,66 +90,48 @@ def master(
     model_name,
     power_graph,
     force,
-    mps_thread_strategy,
     batch,
+    placement_policy,
 ):
-    if batch:
-        assert power_graph, "Batch mode must have powergraph on"
 
     # reset the warmup lock
     r = redis.Redis()
     r.set("warmup-lock", 0)
     r.set("connect-lock", 0)
 
-    child_procs = []
-    driver_cmd = f"python driver.py --result-dir {result_dir}"
-    client_cmd = f"python client.py --mem-frac {mem_frac} --num-procs {num_procs} --model-name {model_name}"
+    clients = [
+        ClientRun(model_name, os.path.join(result_dir, f"{i}.pq"), num_procs)
+        for i in range(num_procs)
+    ]
+    if mem_frac:
+        [c.set_tf_mem_frac(mem_frac) for c in clients]
+
     if allow_growth:
-        client_cmd += " --allow-growth"
+        [c.set_tf_allow_growth() for c in clients]
 
-    # Following page 12 of https://docs.nvidia.com/deploy/pdf/CUDA_Multi_Process_Service_Overview.pdf
-    mps_thread_perc = 1.0
-    if mps_thread_strategy == "even":
-        mps_thread_perc = 1 / num_procs
-    elif mps_thread_strategy == "even_times_2":
-        mps_thread_perc = 1 / (0.5 * num_procs)
+    if batch:
+        [c.set_batch_size(num_procs) for c in clients]
 
-    # run driver
-    if power_graph:
-        ports = find_unbound_port(1)
-    else:
-        ports = find_unbound_port(num_procs)
-
-    for p in ports:
-        port_arg = f" --port {p}"
-        driver_cmd += port_arg
-    driver_cmd = f"numactl -C {num_procs+1} " + driver_cmd
     if force:
-        driver_cmd += " --force"
-    driver_proc = Popen(split(driver_cmd))
-    time.sleep(1)
+        [c.set_force() for c in clients]
 
-    for i, p in enumerate(ports):
-        port_arg = f" --port {p}"
-        cmd = split(f"numactl -C {i+1} " + client_cmd + port_arg)
-        if power_graph:
-            cmd += ["--power-graph"]
-        if batch:
-            cmd += ["--batch"]
-        child_procs.append(
-            Popen(
-                cmd,
-                env=dict(
-                    os.environ, CUDA_MPS_ACTIVE_THREAD_PERCENTAGE=str(mps_thread_perc)
-                ),
+    if power_graph:
+        power_graph_client = client[0]
+        power_graph_client.set_power_graph(num_procs)
+        clients = power_graph_client
+
+    if placement_policy != 0:  # not random placement
+        if TOTAL_CORES * placement_policy < len(clients):
+            raise Exception(
+                f"We have {num_procs} clients but we can only fit {TOTAL_CORES*placement}. Please change the placement policy"
             )
-        )
-        time.sleep(1)
+        all_cores = np.arange(TOTAL_CORES)
+        expanded = np.repeat(all_cores, int(placement_policy))
+        for core, client in zip(expanded, clients):
+            client.set_core(core)
 
-    # run driver
-    driver_proc.wait()
-    [p.terminate() for p in child_procs]
-    time.sleep(2)
+    [c.run() for c in clients]
+    [c.wait() for c in clients]
 
 
 if __name__ == "__main__":

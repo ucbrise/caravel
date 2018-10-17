@@ -11,9 +11,6 @@ sys.path.append("tf-models/research/slim")
 from nets.mobilenet import mobilenet_v2  # isort:skip
 
 
-HEIGHT = 224
-WIDTH = 224
-CHANNELS = 3
 SUPPORTED_MODELS = ["res50", "res152", "mobilenet", "mobilenet-224"]
 MODELS_TO_CKPT = {
     "res50": "ckpts/resnet_v1_50.ckpt",
@@ -32,7 +29,9 @@ MODELS_TO_SHAPE = {
 def get_input(model_name, batch_size=1):
     shape = MODELS_TO_SHAPE[model_name]
     shape[0] = batch_size
-    return np.random.randn(*shape)
+    with tf.device("/gpu:0"):
+        tensor = tf.random_normal(shape)
+    return tensor
 
 
 def _get_endpoints(model_name, img_tensor):
@@ -57,12 +56,15 @@ def load_tf_sess(mem_frac=0.1, allow_growth=False, model_name=None, batch_size=1
     with graph.as_default():
         shape = MODELS_TO_SHAPE[model_name]
         shape[0] = batch_size
-        img_tensor = tf.placeholder(tf.float32, shape=shape)
+        img_tensor = tf.constant(
+            np.random.randn(*MODELS_TO_SHAPE[model_name]).astype(np.float32)
+        )
         predictions = _get_endpoints(model_name, img_tensor)
         saver = tf.train.Saver()
     config = tf.ConfigProto()
-    config.gpu_options.allow_growth = allow_growth
-    config.gpu_options.per_process_gpu_memory_fraction = mem_frac
+    config.gpu_options.allow_growth = True
+    config.gpu_options.per_process_gpu_memory_fraction = 1.1
+    config.gpu_options.allocator_type = "BFC"
     sess = tf.Session(config=config, graph=graph)
     saver.restore(sess, MODELS_TO_CKPT[model_name])
     return sess, img_tensor, predictions
@@ -76,7 +78,9 @@ def _create_subgraph(name_scope, ckpt_path, model_name):
     graph = tf.Graph()
     with graph.as_default():
         with tf.name_scope(name_scope):
-            inp = tf.placeholder(tf.float32, shape=MODELS_TO_SHAPE[model_name])
+            inp = tf.constant(
+                np.random.randn(*MODELS_TO_SHAPE[model_name]).astype(np.float32)
+            )
             predictions = _get_endpoints(model_name, inp)
             saver = tf.train.Saver()
             with tf.Session() as sess:

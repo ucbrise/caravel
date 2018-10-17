@@ -1,87 +1,81 @@
 import time
-from datetime import datetime
-
 import click
 import redis
-import zmq
-
-import ujson as json
-from tf_util import SUPPORTED_MODELS, get_input, load_tf_power_graph, load_tf_sess
+import os
+import pandas as pd
+import models
+import numpy as np
 
 
 def _block_until(key, val):
+    """A semaphore implemented in redis"""
     r = redis.Redis()
-    cur = r.incr(key)
-    if cur == val:
-        return
+    r.incr(key)
     while int(r.get(key)) != val:
         pass
 
 
+def _log(*args, **kwargs):
+    print("[Client]", *args, **kwargs)
+
+
 @click.command()
-@click.option("--port", "-p", required=True)
 @click.option("--mem-frac", type=float, required=True)
 @click.option("--allow-growth", is_flag=True)
-@click.option("--num-procs", type=int, required=True)
-@click.option("--model-name", type=click.Choice(SUPPORTED_MODELS), required=True)
+@click.option("--num-replicas", type=int, required=True)
+@click.option("--model-name", type=click.Choice(models.SUPPORTED_MODELS), required=True)
 @click.option("--power-graph", is_flag=True)
-@click.option("--batch", is_flag=True)
+@click.option("--power-graph-count", type=int, default=1)
+@click.option("--batch-size", type=int, default=1)
+@click.option("--result-path", required=True)
+@click.option("--force", is_flag=True)
 def start_client(
-    port, mem_frac, allow_growth, num_procs, model_name, power_graph, batch
+    mem_frac,
+    allow_growth,
+    num_replicas,
+    model_name,
+    power_graph,
+    power_graph_count,
+    batch_size,
+    result_path,
+    force,
 ):
-    ctx = zmq.Context()
-    sock = ctx.socket(zmq.REQ)
-    sock.connect(f"tcp://127.0.0.1:{port}")
-    print(f"[Client] Bind to port {port}")
+    if os.path.exists(result_path) and not force:
+        _log(f"Path {result_path} exists. Skipping")
+        return
+    os.makedirs(os.path.split(result_path)[0], exist_ok=True)
 
-    if power_graph and not batch:
-        print(f"[Client] Coalescing {num_procs} graphs into one graph!")
-        sess, img_tensors, predictions = load_tf_power_graph(
-            mem_frac, allow_growth, model_name, num_procs
-        )
-        input_img = get_input(model_name)
-        sess_run = lambda: sess.run(
-            predictions, feed_dict={img_tensor: input_img for img_tensor in img_tensors}
-        )
-    elif power_graph and batch:
-        sess, img_tensor, predictions = load_tf_sess(
-            mem_frac, allow_growth, model_name, batch_size=num_procs
-        )
-        input_img = get_input(model_name, batch_size=num_procs)
-        sess_run = lambda: sess.run(predictions, feed_dict={img_tensor: input_img})
-    else:
-        sess, img_tensor, predictions = load_tf_sess(mem_frac, allow_growth, model_name)
-        input_img = get_input(model_name)
-        sess_run = lambda: sess.run(predictions, feed_dict={img_tensor: input_img})
-
-    if not (power_graph or batch):
-        _block_until("connect-lock", num_procs)
+    # Load Model
+    sess_run = models.get_model(
+        model_name, power_graph, power_graph_count, batch_size, mem_frac, allow_growth
+    )
+    if not power_graph:
+        _block_until("connect-lock", num_replicas)
+    _log("Model Loaded")
 
     # Model Warmup
     for _ in range(200):
         sess_run()
-    print(f"[Client] Warmup finished")
+    _log("Warmup finished")
+    if not power_graph:
+        _block_until("warmup-lock", num_replicas)
 
-    if not (power_graph or batch):
-        _block_until("warmup-lock", num_procs)
-
-    query_count = 0
-    recent_proc_time_ms = 0.0
-    driver_sent_time = ""
-    while True:
-        data = {
-            "query_id": query_count,
-            "duration_ms": recent_proc_time_ms,
-            "sent_time_ms": driver_sent_time,
-        }
-        sock.send_string(json.dumps(data))
-        driver_sent_time = sock.recv()
-
+    # Model Evaluation
+    durations = []
+    for _ in range(2000):
         start = time.perf_counter()
         sess_run()
         end = time.perf_counter()
-        query_count += 1
-        recent_proc_time_ms = (end - start) * 1000
+        duration_ms = (end - start) * 1000
+        durations.append(duration_ms)
+
+    durations = durations[500:1500]
+
+    # Save Data
+    df = pd.DataFrame({"duration_ms": durations})
+    df.to_parquet(result_path)
+    mean, p99 = df["duration_ms"].mean(), np.percentile(durations, 99)
+    _log(f"Mean Latency: {mean}, P99: {p99}")
 
 
 if __name__ == "__main__":

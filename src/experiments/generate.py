@@ -1,40 +1,31 @@
 import os
 from itertools import product
 
-# approaches = ["mux", "mps", "powergraph", "mps-even", "mps-even-times-2", "batch"]
-approaches = ["mux", "mps", "powergraph", "batch"]
+approaches = ["mux", "mps", "batch"]
 # models = ["res50", "res152", "mobilenet", "mobilenet-224"]
-models = ["mobilenet"]
-replicas = list(range(1, 6))
-result_dir_root = "learningsys-2018-gpu-mux"
+models = ["mobilenet", "res50"]
+replicas = list(range(1, 15))
+result_dir_root = "learningsys-2018-gpu-mux/p3-8xlarge"
 force = [False, True]
 
 
 def generate_command(approach, model, replica, force):
     mps_req = "start-mps" if approach.startswith("mps") else "stop-mps"
-    mem_frac = 0.1
+
     name = f"{approach}-{model}-{replica}"
     if force:
         name += "-force"
 
-    mps_strategy = "default"
-    if approach == "mps-even":
-        mps_strategy = "even"
-    elif approach == "mps-even-times-2":
-        mps_strategy = "even_times_2"
-
-    cmd = f"""
-    python master.py -mem-frac {mem_frac} --allow-growth --result-dir \
+    cmd = f"""python src/master.py --result-dir \
     {os.path.join(result_dir_root, 'result', approach, model, str(replica))} \
-    --num-procs {replica} --model-name {model} --mps-thread-strategy {mps_strategy} \
+    --num-procs {replica} --model-name {model} \
     """
-    print(
-        """
-        {"--power-graph" if approach in ["powergraph", "batch"] else ""} 
-        {"--batch" if approach == "batch" else ""} 
-        {'--force' if force else ""} 
-    """
-    )
+    if approach == "powergraph":
+        cmd += "\t --power-graph"
+    if approach == "batch":
+        cmd += "\t --batch"
+    if force:
+        cmd += "\t --force"
 
     print(
         f"""
