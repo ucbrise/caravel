@@ -1,10 +1,12 @@
 import os
 from itertools import product
 
-approaches = ["mux", "mps", "batch"]
+# approaches = ["mux", "mps", "batch"]
+approaches = ["mps"]
 # models = ["res50", "res152", "mobilenet", "mobilenet-224"]
-models = ["mobilenet", "res50"]
-replicas = list(range(1, 15))
+# models = ["mobilenet", "res50"]
+models = ["mobilenet"]
+replicas = list(range(10, 40))
 placement_policy = [0]
 result_dir_root = "learningsys-2018-gpu-mux/p3-8xlarge-random-placement"
 force = [False, True]
@@ -44,8 +46,9 @@ def main():
     for approach, model, replica, pp in product(
         approaches, models, replicas, placement_policy
     ):
-        if approach == "mux" and "model" == "res50" and replica > 10:
-            continue
+        # if approach == "mux" and model == "res50" and replica > 10:
+        # if replica > 11:
+        #     continue
         all_names.append(
             generate_command(approach, model, replica, force=False, placement_policy=pp)
         )

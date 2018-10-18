@@ -110,15 +110,18 @@ def master(
         [c.set_tf_allow_growth() for c in clients]
 
     if batch:
-        [c.set_batch_size(num_procs) for c in clients]
+        power_graph_client = clients[0]
+        power_graph_client.set_batch_size(num_procs)
+        power_graph_client.set_power_graph(1)
+        clients = [power_graph_client]
 
     if force:
         [c.set_force() for c in clients]
 
     if power_graph:
-        power_graph_client = client[0]
+        power_graph_client = clients[0]
         power_graph_client.set_power_graph(num_procs)
-        clients = power_graph_client
+        clients = [power_graph_client]
 
     if placement_policy != 0:  # not random placement
         if TOTAL_CORES * placement_policy < len(clients):
