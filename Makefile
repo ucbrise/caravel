@@ -26,6 +26,6 @@ push: format sync
 	git push origin master
 
 run-all:
-	python generate-run-file.py > Makefile.run
+	python src/experiments/generate.py > Makefile.run
 	make all -f Makefile.run | tee run-all.log
 	
