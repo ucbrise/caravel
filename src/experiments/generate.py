@@ -6,7 +6,7 @@ approaches = ["mux", "mps", "batch"]
 models = ["res50", "res152", "mobilenet"]
 replicas = {
     "res50": list(range(1, 15)),
-    "res152": list(range(1, 9)),
+    "res152": list(range(1, 7)),
     "mobilenet": list(range(1, 21)),
 }
 placement_policy = {"mux": [0, 1, 2, 4], "mps": [0, 1, 2, 4], "batch": [0, 1]}
@@ -49,6 +49,11 @@ def main():
         for model in models:
             for replica in replicas[model]:
                 for pp in placement_policy[approach]:
+                    # Special Case
+                    # Takes too long, b.c. unified memory?
+                    if pp == 4 and replica == 20:
+                        continue
+
                     all_names.append(
                         generate_command(
                             approach, model, replica, force=False, placement_policy=pp
