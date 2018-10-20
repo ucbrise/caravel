@@ -75,6 +75,9 @@ class ClientRun:
     def returncode(self):
         return self.proc.returncode
 
+    def set_num_proc(self, num_proc):
+        self.num_proc = num_proc
+
 
 @click.command()
 @click.option("--mem-frac", type=float)
@@ -115,10 +118,10 @@ def master(
         [c.set_tf_allow_growth() for c in clients]
 
     if batch:
-        power_graph_client = clients[0]
-        power_graph_client.set_batch_size(num_procs)
-        power_graph_client.set_power_graph(1)
-        clients = [power_graph_client]
+        batch_client = clients[0]
+        batch_client.set_batch_size(num_procs)
+        batch_client.set_num_proc(1)
+        clients = [batch_client]
 
     if force:
         [c.set_force() for c in clients]

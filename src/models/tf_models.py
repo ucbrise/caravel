@@ -56,9 +56,10 @@ def load_tf_sess(mem_frac=0.1, allow_growth=False, model_name=None, batch_size=1
     with graph.as_default():
         shape = MODELS_TO_SHAPE[model_name]
         shape[0] = batch_size
-        img_tensor = tf.constant(
-            np.random.randn(*MODELS_TO_SHAPE[model_name]).astype(np.float32)
-        )
+        # img_tensor = tf.constant(
+        #     np.random.randn(*shape).astype(np.float32)
+        # )
+        img_tensor = tf.placeholder(tf.float32, shape)
         predictions = _get_endpoints(model_name, img_tensor)
         saver = tf.train.Saver()
     config = tf.ConfigProto()
@@ -67,7 +68,7 @@ def load_tf_sess(mem_frac=0.1, allow_growth=False, model_name=None, batch_size=1
     config.gpu_options.allocator_type = "BFC"
     sess = tf.Session(config=config, graph=graph)
     saver.restore(sess, MODELS_TO_CKPT[model_name])
-    return sess, img_tensor, predictions
+    return sess, img_tensor, predictions, graph
 
 
 # How to merge many subgraphs into a single graph
