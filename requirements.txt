@@ -3,6 +3,8 @@ black
 clicks
 pyzmq
 tensorflow-gpu==1.10.0
-pyarrow
 redis
-isort
+torch
+torchvision
+python-snappy
+fastparquet

@@ -45,11 +45,24 @@ def start_client(
         return
     os.makedirs(os.path.split(result_path)[0], exist_ok=True)
 
+    require_locks = not (power_graph or batch_size != 1)
+    print(f"Require Locks {require_locks}")
     # Load Model
-    sess_run = models.get_model(
-        model_name, power_graph, power_graph_count, batch_size, mem_frac, allow_growth
-    )
-    if not power_graph:
+    if model_name.startswith("torch_"):
+        sess_run, threads = models.get_model_pytorch(
+            model_name, power_graph, power_graph_count, batch_size
+        )
+    else:
+        sess_run = models.get_model(
+            model_name,
+            power_graph,
+            power_graph_count,
+            batch_size,
+            mem_frac,
+            allow_growth,
+        )
+
+    if require_locks:
         _block_until("connect-lock", num_replicas)
     _log("Model Loaded")
 
@@ -57,7 +70,7 @@ def start_client(
     for _ in range(200):
         sess_run()
     _log("Warmup finished")
-    if not power_graph:
+    if require_locks:
         _block_until("warmup-lock", num_replicas)
 
     # Model Evaluation
@@ -71,11 +84,16 @@ def start_client(
 
     durations = durations[500:1500]
 
+    if require_locks:
+        _block_until("exit-lock", num_replicas)
     # Save Data
     df = pd.DataFrame({"duration_ms": durations})
-    df.to_parquet(result_path)
+    df.to_csv(result_path)
     mean, p99 = df["duration_ms"].mean(), np.percentile(durations, 99)
     _log(f"Mean Latency: {mean}, P99: {p99}")
+    import sys
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":

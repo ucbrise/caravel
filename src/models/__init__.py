@@ -1,4 +1,5 @@
 SUPPORTED_MODELS = ["res50", "res152", "mobilenet", "mobilenet-224"]
+SUPPORTED_MODELS += ["torch_res50", "torch_res152", "torch_squeezenet"]
 
 
 def get_model(
@@ -37,13 +38,28 @@ def get_model_pytorch(
     mem_frac=None,
     allow_growth=None,
 ):
-    if powergraph:
-        input_queue, output_queue = load_torch_power_graph(
-            model_name, power_graph_count
-        )
+    from .torch_models import load_torch_model, load_torch_power_graph
+    import torch
+
+    torch.backends.cudnn.enabled = False
+
+    if powergraph and batch_size == 1:
+        inp_qs, out_qs, ts = load_torch_power_graph(model_name, power_graph_count)
 
         def run_one_predict():
-            for _ in range(power_graph_count):
-                input_queue.put("")
-            for _ in range(power_graph_count):
-                output_queue.get()
+            [inp_q.put("") for inp_q in inp_qs]
+            [out_q.get() for out_q in out_qs]
+
+        return run_one_predict, ts
+    else:
+        stream = torch.cuda.Stream()
+
+        with torch.cuda.stream(stream):
+            model, inp = load_torch_model(model_name, batch_size)
+
+        def run_one_predict():
+            with torch.cuda.stream(stream):
+                with torch.no_grad():
+                    model(inp)
+
+        return run_one_predict, None

@@ -3,13 +3,15 @@ from itertools import product
 import time
 
 approaches = ["mux", "mps", "batch"]
-models = ["res50", "res152", "mobilenet"]
+# models = ["res50", "res152", "mobilenet"]
+models = ["torch_res50", "torch_res152", "torch_squeezenet"]
 replicas = {
-    "res50": list(range(1, 15)),
-    "res152": list(range(1, 9)),
-    "mobilenet": list(range(1, 21)),
+    "torch_res50": list(range(1, 10)),
+    "torch_res152": list(range(1, 5)),
+    "torch_squeezenet": list(range(1, 15)),
 }
-placement_policy = {"mux": [0, 1, 2, 4], "mps": [0, 1, 2, 4], "batch": [0, 1]}
+# placement_policy = {"mux": [0, 1, 2, 4], "mps": [0, 1, 2, 4], "batch": [0, 1]}
+placement_policy = {"mux": [1], "mps": [1], "batch": [1]}
 result_dir_root = "learningsys-2018-gpu-mux"
 force = [False, True]
 
@@ -49,6 +51,8 @@ def main():
         for model in models:
             for replica in replicas[model]:
                 for pp in placement_policy[approach]:
+                    if "res152" in model and approach == "batch":
+                        continue
                     all_names.append(
                         generate_command(
                             approach, model, replica, force=False, placement_policy=pp

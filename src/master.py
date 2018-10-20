@@ -71,6 +71,10 @@ class ClientRun:
     def set_core(self, core):
         self.core = core
 
+    @property
+    def returncode(self):
+        return self.proc.returncode
+
 
 @click.command()
 @click.option("--mem-frac", type=float)
@@ -98,6 +102,7 @@ def master(
     r = redis.Redis()
     r.set("warmup-lock", 0)
     r.set("connect-lock", 0)
+    r.set("exit-lock", 0)
 
     clients = [
         ClientRun(model_name, os.path.join(result_dir, f"{i}.pq"), num_procs)
@@ -135,6 +140,7 @@ def master(
 
     [c.run() for c in clients]
     [c.wait() for c in clients]
+    print([c.returncode for c in clients])
 
 
 if __name__ == "__main__":
