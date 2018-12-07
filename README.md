@@ -2,8 +2,9 @@ Paper repo for "Dynamic Space-Time Scheduling for GPU Inference"
 -----------------------------------------
 
 ## Paper and Posters
-[Paper](https://ucbrise.github.io/caravel/assets/paper.pdf)
-[Poster](https://ucbrise.github.io/caravel/assets/poster.pdf)
+[Paper](https://github.com/ucbrise/caravel/raw/master/assets/paper.pdf)
+
+[Poster](https://github.com/ucbrise/caravel/raw/master/assets/poster.pdf)
 
 ## Abstract
 Serving deep neural networks in latency critical interactive settings often requires GPU acceleration. However, the small batch sizes typical in online inference results in poor GPU utilization, a potential performance gap which GPU resource sharing can address.
