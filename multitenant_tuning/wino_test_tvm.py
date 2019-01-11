@@ -1,4 +1,6 @@
+import csv
 import os
+import sys
 import numpy as np
 import tvm
 import topi
@@ -6,6 +8,31 @@ import topi.testing
 from tvm.contrib.pickle_memoize import memoize
 from topi import util
 from topi.nn import pad
+
+print("USAGE: python3 wino_test_tvm.py OUTPUT_FILENAME NUM_GEMM_THREADS NUM_GEMM_TILE NUM_WINOGRAD_BLOCK")
+
+class safelist(list):
+    def get(self, index, default=None):
+        try:
+            return self.__getitem__(index)
+        except IndexError:
+            return default
+        
+argv = safelist(sys.argv)
+
+OUT_FILE = argv.get(1, "log/test.csv")
+GEMM_THREAD = int(argv.get(2, 8))
+GEMM_TILE = int(argv.get(3, GEMM_THREAD))
+WINO_FACTOR = int(argv.get(4, 16))
+
+args = {
+    'OUT_FILE': OUT_FILE,
+    'GEMM_THREAD': GEMM_THREAD,
+    'GEMM_TILE': GEMM_TILE,
+    'WINO_FACTOR': WINO_FACTOR
+}
+
+print("ARGS: " + str(args))
 
 def reference_direct(batch, in_channel, in_size, num_filter, kernel, stride, padding, device):
     in_height = in_width = in_size
@@ -35,7 +62,7 @@ def reference_direct(batch, in_channel, in_size, num_filter, kernel, stride, pad
         return
     with tvm.target.create(device):
         dW = topi.nn.dilate(W, (1, 1, dilation, dilation))
-        B = topi.nn.conv2d(A, dW, stride, padding, layout='NCHW')
+        B = topi.nn.conv2d(A, dW, stride, padding, 1, layout='NCHW')
         s1 = topi.generic.schedule_conv2d_nchw([B])
     a = tvm.nd.array(a_np, ctx)
     w = tvm.nd.array(w_np, ctx)
@@ -208,8 +235,8 @@ def schedule_batched_sgemm(s, U, V, M):
     VL = s.cache_read(VV, "local", [M])
     ML = s.cache_write(M, "local")
 
-    tile = 8
-    num_thread = 8
+    tile = GEMM_TILE
+    num_thread = GEMM_THREAD
     block_factor = tile * num_thread
     step = 8
     vthread = 2
@@ -270,8 +297,8 @@ def schedule_winograd(outs):
     eps, nu, c, p = s[V].op.axis
     s[V].reorder(c, p, eps, nu)
 
-    co, ci = s[V].split(c, factor=16)
-    po, pi = s[V].split(p, factor=16)
+    co, ci = s[V].split(c, factor=WINO_FACTOR)
+    po, pi = s[V].split(p, factor=WINO_FACTOR)
     s[V].bind(ci, tvm.thread_axis("threadIdx.y"))
     s[V].bind(pi, tvm.thread_axis("threadIdx.x"))
     s[V].bind(co, tvm.thread_axis("blockIdx.y"))
@@ -288,8 +315,8 @@ def schedule_winograd(outs):
     s[output].reorder(k, n, ho, wo, hi, wi)
     k = s[output].fuse(k, n)
 
-    hoo, hoi = s[output].split(ho, factor=16)
-    woo, woi = s[output].split(wo, factor=16)
+    hoo, hoi = s[output].split(ho, factor=WINO_FACTOR)
+    woo, woi = s[output].split(wo, factor=WINO_FACTOR)
     s[output].reorder(hoo, woo, hoi, woi, hi, wi)
     s[output].bind(hoi, tvm.thread_axis("threadIdx.y"))
     s[output].bind(woi, tvm.thread_axis("threadIdx.x"))
@@ -361,79 +388,29 @@ def test_winograd(batch, in_channel, in_size, num_filter, kernel, stride, paddin
         #print(func.imported_modules[0].get_source())
         return timer(a, u, b).mean
 
-# for copy paste as markdown
-def generate_table(workloads, wino_times, direct_times, wino_nvptx_times, direct_nvptx_times, lib_times, lib_name):
-    print("| (batch,CI,size,CO) | TVM Winograd (This code) | TVM Direct | TVM Winograd NVPTX (This code) | TVM Direct NVPTX | %s |" % lib_name)
-    print("|------------- |:-------------:|:-------------:|:-------------:|:-------------:|:-------------:|")
-    for (workload, t_wino, t_direct, t_wino_nvptx, t_direct_nvptx, t_lib) in zip(workloads, wino_times, direct_times, wino_nvptx_times, direct_nvptx_times, lib_times):
-        if t_direct and t_direct_nvptx:
-            print("|", workload, "| %.3f | %.3f | %.3f | %.3f | %.3f" % (t_wino,  t_direct, t_wino_nvptx, t_direct_nvptx, t_lib))
-        elif t_direct:
-            print("|", workload, "| %.3f | %.3f | %.3f | N/A | %.3f" % (t_wino,  t_direct, t_wino_nvptx, t_lib))
-        elif t_direct_nvptx:
-            print("|", workload, "| %.3f | N/A | %.3f | %.3f | %.3f" % (t_wino, t_wino_nvptx, t_direct_nvptx, t_lib))
-        else:
-            print("|", workload, "| %.3f | N/A | %.3f | N/A | %.3f" % (t_wino, t_wino_nvptx, t_lib))
+if __name__ == "__main__":
+    vgg_workloads = [(1, 64, 224, 64), #relu, input and output transform slow
+                     (1, 64, 112, 128),#relu2
+                     (1, 128, 112, 128),
+                     (1, 128, 56, 256),
+                     (1, 256, 56, 256), #relu4
+                     (1, 256, 28, 512),
+                     (1, 512, 28, 512), # relu6
+                     (1, 512, 14, 512) # relu7
+                     ]
 
+    wino_times = []
+    wino_nvptx_times = []
+    device = "cuda"
 
-workloads = [(1, 128, 122, 128),
-             (1, 128, 128, 128),
-             (1, 64, 56, 64),
-             (1, 64, 64, 32),
-             (1, 64, 224, 64),
-             (1, 64, 112, 128),
-             (1, 512, 28, 512),
-             (1, 128, 28, 128),
-             (1, 256, 14, 256),
-             (8, 128, 122, 128),
-             (16, 64, 56, 64),
-             (32, 64, 64, 32),
-             (64, 128, 32, 128)
-            ]
-
-vgg_workloads = [(1, 64, 224, 64), #relu, input and output transform slow
-                 (1, 64, 112, 128),#relu2
-                 (1, 128, 112, 128),
-                 (1, 128, 56, 256),
-                 (1, 256, 56, 256), #relu4
-                 (1, 256, 28, 512),
-                 (1, 512, 28, 512), # relu6
-                 (1, 512, 14, 512) # relu7
-                 ]
-
-wino_times = []
-direct_times = []
-wino_nvptx_times = []
-direct_nvptx_times = []
-lib_times = []
-device = "cuda"
-
-for workload in workloads:
-    t_wino = test_winograd(*workload, 3, 1, 1, device)
-    t_wino_nvptx = test_winograd(*workload, 3, 1, 1, "nvptx")
-
-    if workload[1] == 512 or workload[0] > 1:
-        t_direct = None # tvm direct conv2d cannot handle this workload
-        t_direct_nvptx = None
-    else:
-        t_direct = reference_direct(*workload, 3, 1, 1, device)
-        if workload[2] == 122:
-            t_direct_nvptx = None
-        else:
-            t_direct_nvptx = reference_direct(*workload, 3, 1, 1, "nvptx")
-
-    #t_lib = reference_direct(*workload, 3, 1, 1, "cuda -libs=cudnn")
-    t_lib = 0
-    wino_times.append(t_wino * 1000)
-    wino_nvptx_times.append(t_wino_nvptx * 1000)
-    lib_times.append(t_lib * 1000)
-
-    if t_direct:
-        t_direct *= 1000
-    if t_direct_nvptx:
-        t_direct_nvptx *= 1000
-
-    direct_times.append(t_direct)
-    direct_nvptx_times.append(t_direct_nvptx)
-
-generate_table(workloads, wino_times, direct_times, wino_nvptx_times, direct_nvptx_times, lib_times, "cuDNN Winograd")
+    assert(len(sys.argv) > 1)
+    filename = sys.argv[1]
+    
+    with open(OUT_FILE, 'w') as f:
+        f.write("{}\t{}\t{}\n".format("workload", "winograd", "winograd_nnptx"))
+        for workload in vgg_workloads:
+            t_wino = test_winograd(*workload, 3, 1, 1, device)
+            t_wino_nvptx = test_winograd(*workload, 3, 1, 1, "nvptx")
+            wino_times.append(t_wino * 1000)
+            wino_nvptx_times.append(t_wino_nvptx * 1000)
+            f.write("{}\t{}\t{}\n".format(str(workload), str(t_wino * 1000), str(t_wino_nvptx * 1000)))
