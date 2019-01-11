@@ -1,0 +1,3 @@
+[submodule "multitenant_tuning/lib/tvm"]
+	path = multitenant_tuning/lib/tvm
+	url = https://github.com/dmlc/tvm
